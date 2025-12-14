@@ -9,6 +9,7 @@ A Windows GUI application with system tray integration that limits daily compute
 - ✅ **30-Second Sound Alert** - Audible warning (3 beeps) when 30 seconds remaining
 - ✅ **Custom Lock Screen** - Full-screen password-protected lock when time limit reached
 - ✅ **Admin Unlock** - Unlock with admin password (temporary access)
+- ✅ **Reset Timer on Lock** - Reset counter to zero directly from lock screen
 - ✅ **Daily Reset** - Automatically resets at midnight
 - ✅ **Smart Pause** - Stops counting when:
   - Laptop lid is closed
@@ -257,19 +258,24 @@ Access via password-protected menu:
 When time limit is reached, a full-screen lock appears:
 - **Cannot be closed** - No X button, Alt+F4 disabled, TopMost
 - **Live clock** - Shows current date and time (updates every second)
-- **Password required** - Must enter admin password to unlock
+- **Usage display** - Shows current vs. maximum time (e.g., "Used: 04:00:00 / 04:00:00")
+- **Password required** - Must enter admin password to unlock or reset
+- **Two unlock options**:
+  - **Unlock** - Temporary access (re-locks if time still exceeded)
+  - **Reset Timer** - Reset counter to zero and unlock permanently
 - **Visual feedback** - Screen shakes on wrong password
-- **Auto re-lock** - If time still exceeded after unlock, locks again
-- **Temporary access** - Admin can unlock to save work/extend time
+- **Auto re-lock** - If unlocked without reset, locks again when time exceeded
 
 **Lock Screen Features:**
 - 🛑 Full-screen dark overlay
 - ⏰ "⏱️ TIME LIMIT REACHED" header
 - 📅 Live date and time display
+- 📊 Usage information (current / max)
 - 🔐 Password entry field
-- 🔓 Unlock button
+- 🔓 **Unlock** button (temporary access)
+- 🔄 **Reset Timer** button (reset counter + unlock)
 - ❌ Cannot minimize, close, or bypass
-- 🔄 Re-locks if time still exceeded
+- ✅ Both buttons require admin password
 
 ## Troubleshooting
 
@@ -291,6 +297,9 @@ When time limit is reached, a full-screen lock appears:
 ### Can't unlock lock screen
 - Enter the correct admin password (default: `admin123`)
 - Password is case-sensitive
+- Two options available on lock screen:
+  - **Unlock** - Temporary access (re-locks if time still exceeded)
+  - **Reset Timer** - Reset counter to zero and unlock permanently
 - If password forgotten:
   - Boot to Windows Safe Mode
   - Navigate to application directory
@@ -452,3 +461,4 @@ My Prompts:
 4/ when the screen is lock how to unlock with admin password?
 
 5/ in the GUI, the Used Today and Time Remainding must be in tick to update the time.
+6/ the application is in the lock mode, when key in the the admin password, reset the timer counter.

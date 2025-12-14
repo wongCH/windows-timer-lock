@@ -372,11 +372,13 @@ namespace WindowsTimerLock
         private void ShowLockScreen()
         {
             // Show custom lock screen with password unlock
-            using (var lockScreen = new LockScreenForm(passwordHash))
+            using (var lockScreen = new LockScreenForm(passwordHash, totalUsageToday, maxHours))
             {
-                if (lockScreen.ShowDialog() == DialogResult.OK)
+                var result = lockScreen.ShowDialog();
+                
+                if (result == DialogResult.OK)
                 {
-                    // Admin unlocked - check if still within limit
+                    // Admin unlocked without reset
                     if (totalUsageToday.TotalHours < maxHours)
                     {
                         isPaused = false;
@@ -387,6 +389,15 @@ namespace WindowsTimerLock
                         // Still over limit, show lock screen again
                         ShowLockScreen();
                     }
+                }
+                else if (result == DialogResult.Retry)
+                {
+                    // Admin unlocked and chose to reset timer
+                    totalUsageToday = TimeSpan.Zero;
+                    isPaused = false;
+                    lastUpdateTime = DateTime.Now;
+                    soundAlertPlayed = false;
+                    SaveUsageData();
                 }
             }
         }
@@ -921,13 +932,19 @@ namespace WindowsTimerLock
         private Label instructionLabel;
         private TextBox passwordTextBox;
         private Button unlockButton;
+        private Button resetButton;
         private Label timeLabel;
+        private Label usageLabel;
         private System.Windows.Forms.Timer clockTimer;
         private string adminPasswordHash;
+        private TimeSpan currentUsage;
+        private int maxHoursLimit;
 
-        public LockScreenForm(string passwordHash)
+        public LockScreenForm(string passwordHash, TimeSpan usage, int maxHours)
         {
             adminPasswordHash = passwordHash;
+            currentUsage = usage;
+            maxHoursLimit = maxHours;
             InitializeComponents();
         }
 
@@ -971,6 +988,16 @@ namespace WindowsTimerLock
             clockTimer.Tick += (s, e) => UpdateTime();
             clockTimer.Start();
 
+            // Usage info
+            usageLabel = new Label();
+            usageLabel.Text = $"Used: {currentUsage.Hours:D2}:{currentUsage.Minutes:D2}:{currentUsage.Seconds:D2} / {maxHoursLimit:D2}:00:00";
+            usageLabel.Font = new Font("Segoe UI", 16, FontStyle.Bold);
+            usageLabel.ForeColor = Color.FromArgb(255, 180, 50);
+            usageLabel.AutoSize = false;
+            usageLabel.TextAlign = ContentAlignment.MiddleCenter;
+            usageLabel.Dock = DockStyle.Top;
+            usageLabel.Height = 50;
+
             // Instruction
             instructionLabel = new Label();
             instructionLabel.Text = "Your daily computer usage limit has been reached.\n\nEnter admin password to unlock:";
@@ -983,7 +1010,7 @@ namespace WindowsTimerLock
             // Center panel
             Panel centerPanel = new Panel();
             centerPanel.Width = 500;
-            centerPanel.Height = 200;
+            centerPanel.Height = 260;
             centerPanel.BackColor = Color.FromArgb(40, 40, 40);
 
             // Password textbox
@@ -1008,15 +1035,28 @@ namespace WindowsTimerLock
             // Unlock button
             unlockButton = new Button();
             unlockButton.Text = "Unlock";
-            unlockButton.Font = new Font("Segoe UI", 14, FontStyle.Bold);
-            unlockButton.Width = 150;
+            unlockButton.Font = new Font("Segoe UI", 12, FontStyle.Bold);
+            unlockButton.Width = 140;
             unlockButton.Height = 45;
             unlockButton.BackColor = Color.FromArgb(0, 120, 215);
             unlockButton.ForeColor = Color.White;
             unlockButton.FlatStyle = FlatStyle.Flat;
             unlockButton.FlatAppearance.BorderSize = 0;
-            unlockButton.Location = new Point(175, 170);
+            unlockButton.Location = new Point(50, 180);
             unlockButton.Click += UnlockButton_Click;
+
+            // Reset button
+            resetButton = new Button();
+            resetButton.Text = "Reset Timer";
+            resetButton.Font = new Font("Segoe UI", 12, FontStyle.Bold);
+            resetButton.Width = 140;
+            resetButton.Height = 45;
+            resetButton.BackColor = Color.FromArgb(200, 100, 0);
+            resetButton.ForeColor = Color.White;
+            resetButton.FlatStyle = FlatStyle.Flat;
+            resetButton.FlatAppearance.BorderSize = 0;
+            resetButton.Location = new Point(310, 180);
+            resetButton.Click += ResetButton_Click;
 
             // Add to center panel
             centerPanel.Controls.Add(instructionLabel);
@@ -1024,6 +1064,7 @@ namespace WindowsTimerLock
             instructionLabel.Width = 500;
             centerPanel.Controls.Add(passwordTextBox);
             centerPanel.Controls.Add(unlockButton);
+            centerPanel.Controls.Add(resetButton);
 
             // Position center panel
             this.Controls.Add(centerPanel);
@@ -1037,6 +1078,7 @@ namespace WindowsTimerLock
 
             this.Controls.Add(messageLabel);
             this.Controls.Add(timeLabel);
+            this.Controls.Add(usageLabel);
 
             // Initial position
             centerPanel.Location = new Point(
@@ -1075,31 +1117,56 @@ namespace WindowsTimerLock
             }
             else
             {
-                // Wrong password - shake effect
-                Point original = this.Location;
-                for (int i = 0; i < 3; i++)
-                {
-                    this.Location = new Point(original.X + 10, original.Y);
-                    System.Threading.Thread.Sleep(50);
-                    this.Location = new Point(original.X - 10, original.Y);
-                    System.Threading.Thread.Sleep(50);
-                }
-                this.Location = original;
-
-                passwordTextBox.Clear();
-                passwordTextBox.BackColor = Color.FromArgb(150, 40, 40);
-                Task.Delay(500).ContinueWith(t =>
-                {
-                    if (!passwordTextBox.IsDisposed)
-                    {
-                        passwordTextBox.Invoke((Action)(() =>
-                        {
-                            passwordTextBox.BackColor = Color.FromArgb(60, 60, 60);
-                        }));
-                    }
-                });
-                passwordTextBox.Focus();
+                ShowWrongPasswordFeedback();
             }
+        }
+
+        private void ResetButton_Click(object? sender, EventArgs e)
+        {
+            string enteredHash = HashPassword(passwordTextBox.Text);
+            
+            if (enteredHash == adminPasswordHash)
+            {
+                if (MessageBox.Show("Reset the timer to zero and unlock?", "Confirm Reset",
+                                  MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
+                {
+                    clockTimer.Stop();
+                    this.DialogResult = DialogResult.Retry; // Using Retry to signal reset
+                    this.Close();
+                }
+            }
+            else
+            {
+                ShowWrongPasswordFeedback();
+            }
+        }
+
+        private void ShowWrongPasswordFeedback()
+        {
+            // Wrong password - shake effect
+            Point original = this.Location;
+            for (int i = 0; i < 3; i++)
+            {
+                this.Location = new Point(original.X + 10, original.Y);
+                System.Threading.Thread.Sleep(50);
+                this.Location = new Point(original.X - 10, original.Y);
+                System.Threading.Thread.Sleep(50);
+            }
+            this.Location = original;
+
+            passwordTextBox.Clear();
+            passwordTextBox.BackColor = Color.FromArgb(150, 40, 40);
+            Task.Delay(500).ContinueWith(t =>
+            {
+                if (!passwordTextBox.IsDisposed)
+                {
+                    passwordTextBox.Invoke((Action)(() =>
+                    {
+                        passwordTextBox.BackColor = Color.FromArgb(60, 60, 60);
+                    }));
+                }
+            });
+            passwordTextBox.Focus();
         }
 
         private string HashPassword(string password)

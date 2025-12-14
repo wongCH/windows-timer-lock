@@ -464,26 +464,59 @@ Verify cannot exit without admin password
 ## Test Case 21: Admin Password Unlock from Lock Screen
 
 ### Objective
-Verify admin can unlock with correct password
+Verify admin can unlock with correct password (temporary access)
 
 ### Steps
 1. Reach time limit (lock screen appears)
-2. Enter correct admin password in lock screen
-3. Click "Unlock" button
-4. Observe behavior
+2. Observe lock screen displays usage info
+3. Enter correct admin password in lock screen
+4. Click "Unlock" button (NOT Reset Timer)
+5. Observe behavior
 
 ### Expected Results
+- ✅ Lock screen shows: "Used: HH:MM:SS / HH:MM:SS"
+- ✅ Lock screen shows two buttons: "Unlock" and "Reset Timer"
 - ✅ Lock screen accepts correct password
 - ✅ If still over limit: Lock screen reappears immediately
-- ✅ If under limit (new day/reset): Returns to normal operation
+- ✅ If under limit (new day): Returns to normal operation
 - ✅ Timer remains paused while locked
 - ✅ Admin can temporarily unlock to save work
+- ✅ Counter NOT reset (only temporary access)
 
 ### Pass/Fail: ⬜
 
 ---
 
-## Test Case 21a: Wrong Password on Lock Screen
+## Test Case 21a: Reset Timer from Lock Screen
+
+### Objective
+Verify admin can reset timer and unlock from lock screen
+
+### Steps
+1. Reach time limit (lock screen appears)
+2. Enter correct admin password
+3. Click "Reset Timer" button
+4. Confirm the reset dialog
+5. Observe behavior
+
+### Expected Results
+- ✅ Lock screen shows "Reset Timer" button alongside "Unlock"
+- ✅ Clicking "Reset Timer" requires password
+- ✅ Confirmation dialog: "Reset the timer to zero and unlock?"
+- ✅ After confirming:
+  - Lock screen closes
+  - Timer counter resets to 00:00:00
+  - Status changes to RUNNING
+  - Timer starts counting from zero
+  - System returns to normal operation
+- ✅ Changes persist (saved to timer_data.bin)
+- ✅ Does NOT re-lock after reset
+
+### Pass/Fail: ⬜
+
+---
+
+## Test Case 21b: Wrong Password on Lock Screen
 
 ### Objective
 Verify lock screen rejects wrong password
@@ -491,7 +524,7 @@ Verify lock screen rejects wrong password
 ### Steps
 1. Reach time limit (lock screen appears)
 2. Enter incorrect password
-3. Click "Unlock" or press Enter
+3. Click "Unlock" or "Reset Timer" button
 4. Observe behavior
 
 ### Expected Results
@@ -501,12 +534,13 @@ Verify lock screen rejects wrong password
 - ✅ Lock screen remains displayed
 - ✅ Focus returns to password field
 - ✅ Cannot bypass lock screen
+- ✅ Same behavior for both "Unlock" and "Reset Timer" buttons
 
 ### Pass/Fail: ⬜
 
 ---
 
-## Test Case 21b: Lock Screen Cannot Be Closed
+## Test Case 21c: Lock Screen Cannot Be Closed
 
 ### Objective
 Verify lock screen cannot be bypassed
@@ -523,7 +557,31 @@ Verify lock screen cannot be bypassed
 - ✅ Lock screen remains TopMost
 - ✅ Cannot click outside to close
 - ✅ Cannot switch to other windows easily
-- ✅ Only correct password unlocks
+- ✅ Only correct password (with Unlock or Reset) works
+
+### Pass/Fail: ⬜
+
+---
+
+## Test Case 21d: Cancel Reset Timer Confirmation
+
+### Objective
+Verify user can cancel reset timer operation
+
+### Steps
+1. Reach time limit (lock screen appears)
+2. Enter correct admin password
+3. Click "Reset Timer" button
+4. Click "No" on confirmation dialog
+5. Observe behavior
+
+### Expected Results
+- ✅ Confirmation dialog appears: "Reset the timer to zero and unlock?"
+- ✅ Clicking "No" cancels the operation
+- ✅ Lock screen remains displayed
+- ✅ Timer NOT reset
+- ✅ Password field cleared
+- ✅ User can try again or click "Unlock" instead
 
 ### Pass/Fail: ⬜
 
