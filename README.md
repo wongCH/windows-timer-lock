@@ -430,3 +430,17 @@ The shield icon shows real-time countdown in the tooltip.
 ---
 
 **Built with .NET 10.0 on macOS using Docker** 🐳 🪟
+
+# Gen Ai Instruction
+1/ i am using Claude Sonnet 4.5
+
+My Prompts:
+1/ I want to write a windows application running without any GUI. This application will lock down the windows if it uses more than 4 hours. It needed an admin password to unlock the windows. It reset every day 23:59. It needs to keep the total time per day, user cannot restart the windows to reset the total time per day. The counter stop is the laptop lid is close or windows log out.Add a kill switch to shutdown entire programme and unlock the windows.providers me step by step to setup development environment on MacOs using Docker. Combine all the dll into 1 single EXE for easy deployment.
+
+2/ change the code to allow count down timer. the GUI also provides admin UI which is protected by password to allow reset of counter, to change the hours or disable the count down.
+
+3/ create a test script to write up all the test usecases
+
+4/ when the screen is lock how to unlock with admin password?
+
+5/ in the GUI, the Used Today and Time Remainding must be in tick to update the time.
