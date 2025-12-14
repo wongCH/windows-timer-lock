@@ -1,0 +1,32 @@
+# Build outputs
+bin/
+obj/
+output/
+
+# .NET build artifacts
+*.dll
+*.exe
+*.pdb
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE/Editor files
+.vs/
+.vscode/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Sensitive data files
+timer_data.bin
+config.bin
+kill_switch.txt
+
+# Docker volumes
+.docker/
+
+# Logs
+*.log
