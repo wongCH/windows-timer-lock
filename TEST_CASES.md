@@ -812,6 +812,30 @@ Verify minimum setting works
 
 ---
 
+## Test Case 32: 30-Second Sound Alert
+
+### Objective
+Verify audible warning sounds when 30 seconds remaining
+
+### Steps
+1. Set max hours to a low value (e.g., 0.01 hours = 36 seconds)
+2. Start the application
+3. Wait until 30 seconds remaining
+4. Listen for sound alert
+5. Wait for countdown to expire
+
+### Expected Results
+- ✅ Application beeps 3 times when 30 seconds remaining
+- ✅ Each beep is 800 Hz for 500ms with 200ms pause
+- ✅ Sound only plays once (not repeatedly)
+- ✅ Sound resets for next day
+- ✅ No sound if disabled or not supported
+- ✅ Countdown continues normally after sound
+
+### Pass/Fail: ⬜
+
+---
+
 ## Performance Benchmarks
 
 ### CPU Usage
@@ -835,7 +859,7 @@ Verify minimum setting works
 
 ## Test Summary
 
-**Total Test Cases:** 36 + Performance Benchmarks
+**Total Test Cases:** 37 + Performance Benchmarks
 
 | Category | Count |
 |----------|-------|
@@ -843,7 +867,7 @@ Verify minimum setting works
 | UI & Display | 6 |
 | Authentication | 6 |
 | Configuration | 6 |
-| Timer Behavior | 9 |
+| Timer Behavior | 10 |
 | Persistence | 4 |
 | Edge Cases | 2 |
 | Lock Screen | 3 |

@@ -6,6 +6,7 @@ A Windows GUI application with system tray integration that limits daily compute
 
 ### Core Functionality
 - ✅ **Countdown Timer** - Real-time display in system tray tooltip
+- ✅ **30-Second Sound Alert** - Audible warning (3 beeps) when 30 seconds remaining
 - ✅ **Custom Lock Screen** - Full-screen password-protected lock when time limit reached
 - ✅ **Admin Unlock** - Unlock with admin password (temporary access)
 - ✅ **Daily Reset** - Automatically resets at midnight
@@ -394,7 +395,14 @@ The shield icon shows real-time countdown in the tooltip.
 
 ## Version History
 
-### v2.2 (Current)
+### v2.3 (Current)
+- ➕ Added 30-second countdown sound alert
+- 🔊 Plays 3 beeps (800 Hz) when 30 seconds remaining
+- 🔔 Alert plays once per day, resets at midnight
+- 🔇 Gracefully handles systems where sound is not supported
+- ⚠️ Provides audible warning before time limit reached
+
+### v2.2
 - ➕ Added live updating countdown dialog (replaces static MessageBox)
 - ➕ Real-time updates every second for Used Today and Time Remaining
 - ➕ Color-coded status indicators (Running/Paused/Disabled)

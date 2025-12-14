@@ -43,9 +43,10 @@ namespace WindowsTimerLock
         private DateTime currentDate = DateTime.Today;
         private bool isPaused = false;
         private bool isEnabled = true;
+        private bool soundAlertPlayed = false;
         
         // Settings
-        private int maxHours = 4;
+        private int maxHours = 4; //maximum hours per day
         private string passwordHash;
 
         public TimerLockApp()
@@ -106,6 +107,7 @@ namespace WindowsTimerLock
                 totalUsageToday = TimeSpan.Zero;
                 currentDate = now.Date;
                 isPaused = false;
+                soundAlertPlayed = false;
             }
 
             // If not paused and enabled, increment usage time
@@ -113,6 +115,14 @@ namespace WindowsTimerLock
             {
                 TimeSpan elapsed = now - lastUpdateTime;
                 totalUsageToday += elapsed;
+                
+                // Check for 30-second warning
+                TimeSpan remaining = TimeSpan.FromHours(maxHours) - totalUsageToday;
+                if (!soundAlertPlayed && remaining.TotalSeconds <= 30 && remaining.TotalSeconds > 0)
+                {
+                    soundAlertPlayed = true;
+                    PlayWarningSound();
+                }
                 
                 // Check if time limit exceeded
                 if (totalUsageToday.TotalHours >= maxHours)
@@ -123,6 +133,26 @@ namespace WindowsTimerLock
 
             lastUpdateTime = now;
             UpdateTrayIcon();
+        }
+
+        private void PlayWarningSound()
+        {
+            Task.Run(() =>
+            {
+                try
+                {
+                    // Play 3 beeps to alert user
+                    for (int i = 0; i < 3; i++)
+                    {
+                        Console.Beep(800, 500); // 800 Hz for 500ms
+                        System.Threading.Thread.Sleep(200);
+                    }
+                }
+                catch
+                {
+                    // Ignore if beep is not supported
+                }
+            });
         }
 
         private void UpdateTrayIcon()
@@ -202,14 +232,10 @@ namespace WindowsTimerLock
             {
                 if (loginForm.ShowDialog() == DialogResult.OK)
                 {
-                    if (MessageBox.Show("Are you sure you want to exit the timer application?", 
-                                       "Confirm Exit", MessageBoxButtons.YesNo, 
-                                       MessageBoxIcon.Question) == DialogResult.Yes)
-                    {
-                        SaveUsageData();
-                        trayIcon.Visible = false;
-                        Application.Exit();
-                    }
+                    
+                    SaveUsageData();
+                    trayIcon.Visible = false;
+                    Application.Exit();
                 }
             }
         }
