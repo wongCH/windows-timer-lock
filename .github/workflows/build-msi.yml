@@ -1,0 +1,112 @@
+name: Build MSI Installer
+
+on:
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'Program.cs'
+      - 'WindowsTimerLock.csproj'
+      - 'Installer.wxs'
+      - '.github/workflows/build-msi.yml'
+  workflow_dispatch:
+  release:
+    types: [created]
+
+jobs:
+  build-msi:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '10.0.x'
+    
+    - name: Build Application
+      run: |
+        dotnet publish WindowsTimerLock.csproj `
+          -c Release `
+          -r win-x64 `
+          --self-contained true `
+          -p:PublishSingleFile=true `
+          -p:IncludeNativeLibrariesForSelfExtract=true `
+          -p:EnableCompressionInSingleFile=true `
+          -o output/win-x64
+    
+    - name: Verify EXE exists
+      run: |
+        if (!(Test-Path "output/win-x64/WindowsTimerLock.exe")) {
+          Write-Error "WindowsTimerLock.exe not found!"
+          exit 1
+        }
+        Write-Host "EXE found: $(Get-Item output/win-x64/WindowsTimerLock.exe | Select-Object -ExpandProperty Length) bytes"
+    
+    - name: Install WiX Toolset
+      run: |
+        choco install wixtoolset -y --version=3.11.2
+        $env:PATH = "C:\Program Files (x86)\WiX Toolset v3.11\bin;$env:PATH"
+        echo "C:\Program Files (x86)\WiX Toolset v3.11\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+    
+    - name: Create dummy app icon if missing
+      run: |
+        if (!(Test-Path "app.ico")) {
+          Write-Host "Creating dummy app.ico"
+          $null | Out-File "app.ico" -Encoding ASCII
+        }
+    
+    - name: Create installer directory
+      run: |
+        New-Item -ItemType Directory -Path installer -Force | Out-Null
+    
+    - name: Compile WiX source
+      run: |
+        & "C:\Program Files (x86)\WiX Toolset v3.11\bin\candle.exe" `
+          -ext WixUtilExtension `
+          -arch x64 `
+          -out installer\Installer.wixobj `
+          Installer.wxs
+    
+    - name: Link MSI
+      run: |
+        & "C:\Program Files (x86)\WiX Toolset v3.11\bin\light.exe" `
+          -ext WixUtilExtension `
+          -ext WixUIExtension `
+          -sval `
+          -out installer\WindowsTimerLock.msi `
+          installer\Installer.wixobj
+    
+    - name: Get MSI info
+      run: |
+        $msi = Get-Item installer\WindowsTimerLock.msi
+        $sizeMB = [math]::Round($msi.Length / 1MB, 2)
+        Write-Host "MSI created successfully!"
+        Write-Host "File: $($msi.FullName)"
+        Write-Host "Size: $sizeMB MB"
+        echo "MSI_SIZE=$sizeMB MB" >> $env:GITHUB_ENV
+    
+    - name: Upload MSI Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: WindowsTimerLock-MSI-Installer
+        path: installer/WindowsTimerLock.msi
+        retention-days: 90
+    
+    - name: Upload EXE Artifact (standalone)
+      uses: actions/upload-artifact@v4
+      with:
+        name: WindowsTimerLock-EXE
+        path: output/win-x64/WindowsTimerLock.exe
+        retention-days: 90
+    
+    - name: Create Release Assets (if release)
+      if: github.event_name == 'release'
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          installer/WindowsTimerLock.msi
+          output/win-x64/WindowsTimerLock.exe
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

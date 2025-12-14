@@ -86,11 +86,57 @@ A Windows GUI application with system tray integration that limits daily compute
 
 ## Deployment to Windows
 
-### Step 1: Transfer the EXE
-Copy `output/win-x64/WindowsTimerLock.exe` to your Windows machine.
+### Method 1: MSI Installer (Recommended)
 
-### Step 2: Run as Administrator
-Right-click `WindowsTimerLock.exe` and select "Run as administrator"
+**Automatic installation with startup configuration**
+
+1. **Build the MSI installer** (on Windows machine):
+   - Install WiX Toolset v3.11+: https://github.com/wixtoolset/wix3/releases
+   - Transfer files: `WindowsTimerLock.exe`, `Installer.wxs`, `build-msi.ps1`, `License.rtf`
+   - Run PowerShell as Administrator: `.\build-msi.ps1`
+   - MSI created at: `installer\WindowsTimerLock.msi`
+
+2. **Install the MSI**:
+   - Double-click `WindowsTimerLock.msi` and follow wizard
+   - Or silent install: `msiexec /i WindowsTimerLock.msi /quiet`
+
+3. **What it does automatically**:
+   - ✅ Installs to `C:\Program Files\WindowsTimerLock\`
+   - ✅ Creates scheduled task to run at Windows startup
+   - ✅ Runs as SYSTEM with highest privileges
+   - ✅ Sets permissions (users can't delete)
+   - ✅ Adds Start Menu shortcut
+   - ✅ Registers in Add/Remove Programs for easy uninstall
+
+📖 See [MSI_INSTALLER.md](MSI_INSTALLER.md) for complete documentation
+
+### Method 2: PowerShell Deployment Script
+
+**Semi-automatic installation**
+
+1. Transfer `WindowsTimerLock.exe` to `C:\temp\` on Windows
+2. Transfer `deploy.ps1` to Windows
+3. Run PowerShell as Administrator: `.\deploy.ps1`
+
+This will:
+- Install to `C:\Program Files\WindowsTimerLock\`
+- Create scheduled task for startup
+- Set file permissions
+
+### Method 3: Manual Installation
+
+**Basic deployment without startup**
+
+1. **Transfer the EXE**
+   Copy `output/win-x64/WindowsTimerLock.exe` to your Windows machine
+
+2. **Run as Administrator**
+   Right-click `WindowsTimerLock.exe` and select "Run as administrator"
+
+3. **Configure Startup (Optional)**
+   - Press `Win + R`, type `shell:startup`, press Enter
+   - Create shortcut to `WindowsTimerLock.exe` in this folder
+   - Right-click shortcut → Properties → Advanced → "Run as administrator"
 
 The application will:
 - Start counting immediately
@@ -99,7 +145,7 @@ The application will:
 - Create `timer_data.bin` and `config.bin` files to persist settings
 - Lock the computer when time limit is reached
 
-### Step 3: Basic Usage
+## Basic Usage
 
 **View Countdown:**
 - Hover over the tray icon to see remaining time
@@ -120,18 +166,14 @@ The application will:
 2. Enter admin password
 3. Confirm exit
 
-### Step 3: Install as Windows Service (Optional)
+## Automatic Startup Options Comparison
 
-To run the application automatically on startup, install it as a Windows service using NSSM:
-
-1. Download NSSM: https://nssm.cc/download
-2. Open Command Prompt as Administrator
-3. Run:
-   ```cmd
-   nssm install WindowsTimerLock "C:\path\to\WindowsTimerLock.exe"
-   nssm set WindowsTimerLock Start SERVICE_AUTO_START
-   nssm start WindowsTimerLock
-   ```
+| Method | Difficulty | Runs As | Uninstall | Notes |
+|--------|-----------|---------|-----------|-------|
+| **MSI Installer** | Easy | SYSTEM | Add/Remove Programs | ⭐ Recommended - Most professional |
+| **PowerShell Script** | Medium | SYSTEM | Manual task deletion | Good for IT deployment |
+| **Startup Folder** | Easy | User | Delete shortcut | Simple but less secure |
+| **Task Scheduler** | Medium | SYSTEM | Task Scheduler UI | Manual setup required |
 
 ## Kill Switch
 
@@ -196,11 +238,16 @@ timer/
 ├── WindowsTimerLock.csproj # .NET project configuration
 ├── app.manifest           # Windows manifest (admin rights)
 ├── Program.cs             # Main application code (GUI + logic)
-├── build.sh              # Build script for macOS
-├── clean.sh              # Clean script
-├── README.md             # User documentation
-├── SETUP.md              # Development setup guide
-├── TEST_CASES.md         # Comprehensive test scenarios
+├── build.sh               # Build script for macOS
+├── clean.sh               # Clean script
+├── deploy.ps1             # PowerShell deployment script
+├── Installer.wxs          # WiX MSI installer configuration
+├── build-msi.ps1          # MSI builder script
+├── License.rtf            # License agreement for installer
+├── README.md              # User documentation
+├── SETUP.md               # Development setup guide
+├── TEST_CASES.md          # Comprehensive test scenarios
+├── MSI_INSTALLER.md       # MSI creation guide
 └── output/
     └── win-x64/
         └── WindowsTimerLock.exe  # Final executable (~49 MB)
@@ -209,8 +256,15 @@ timer/
 ### Runtime Files (Created on Windows)
 ```
 ├── timer_data.bin         # Daily usage data
-├── config.bin            # Settings and password hash
-└── kill_switch.txt       # Emergency shutdown trigger
+├── config.bin             # Settings and password hash
+└── kill_switch.txt        # Emergency shutdown trigger
+```
+
+### Installer Output
+```
+installer/
+├── WindowsTimerLock.msi   # MSI installer package
+└── Installer.wixobj       # Compiled WiX object (intermediate)
 ```
 
 ## GUI Overview
@@ -332,6 +386,26 @@ When time limit is reached, a full-screen lock appears:
 - Confirm password matches
 - Check file permissions on `config.bin`
 
+## Uninstalling
+
+### MSI Installation
+1. Open **Settings** → **Apps** → **Installed apps**
+2. Find "Windows Timer Lock"
+3. Click **Uninstall**
+   - Or command line: `msiexec /x WindowsTimerLock.msi /quiet`
+
+### PowerShell/Manual Installation
+1. Delete scheduled task:
+   ```powershell
+   schtasks /delete /tn "WindowsTimerLock" /f
+   ```
+2. Delete application files:
+   ```powershell
+   Remove-Item "C:\Program Files\WindowsTimerLock" -Recurse -Force
+   ```
+3. Remove startup shortcut (if using Method 3):
+   - Press `Win + R`, type `shell:startup`, delete shortcut
+
 ## Security Considerations
 
 ⚠️ **Important Security Notes:**
@@ -341,12 +415,15 @@ When time limit is reached, a full-screen lock appears:
 3. Advanced users can:
    - Delete the `timer_data.bin` file
    - Use Task Manager to kill the process
-   - Boot into Safe Mode to disable the service
+   - Boot into Safe Mode to disable the scheduled task
+   - Uninstall via Add/Remove Programs (MSI) or delete files manually
 
 For production use in a managed environment, consider:
-- Implementing process protection
-- Using Windows Group Policy to restrict access
+- Using Windows Group Policy to restrict access to Task Scheduler
+- Setting NTFS permissions (done automatically by MSI installer)
 - Monitoring via MDM (Mobile Device Management) solutions
+- Code signing the MSI to avoid SmartScreen warnings
+- Implementing additional process protection mechanisms
 
 ## License
 

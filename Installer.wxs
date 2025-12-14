@@ -1,0 +1,143 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi"
+     xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
+  
+  <Product Id="*" 
+           Name="Windows Timer Lock" 
+           Language="1033" 
+           Version="1.0.0.0" 
+           Manufacturer="Your Company Name" 
+           UpgradeCode="12345678-1234-1234-1234-123456789ABC">
+    
+    <Package InstallerVersion="200" 
+             Compressed="yes" 
+             InstallScope="perMachine" 
+             Platform="x64"
+             Description="Windows Timer Lock - Daily Computer Usage Limiter"
+             Comments="Limits daily computer usage with automatic locking"/>
+    
+    <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <!-- Properties -->
+    <Property Id="ARPPRODUCTICON" Value="AppIcon.ico" />
+    <Property Id="ARPCOMMENTS" Value="Windows Timer Lock - Daily Computer Usage Limiter" />
+    <Property Id="ARPCONTACT" Value="support@yourcompany.com" />
+    <Property Id="ARPHELPLINK" Value="https://github.com/yourusername/timer" />
+    <Property Id="ARPNOREPAIR" Value="1" />
+    
+    <!-- Require Admin privileges -->
+    <Property Id="ALLUSERS" Value="1" />
+    
+    <!-- Feature: Main application -->
+    <Feature Id="ProductFeature" 
+             Title="Windows Timer Lock" 
+             Level="1"
+             Description="Main application files"
+             ConfigurableDirectory="INSTALLFOLDER">
+      <ComponentGroupRef Id="ProductComponents" />
+      <ComponentRef Id="ScheduledTaskComponent" />
+    </Feature>
+
+    <!-- UI -->
+    <UIRef Id="WixUI_InstallDir" />
+    <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
+    
+    <!-- License -->
+    <WixVariable Id="WixUILicenseRtf" Value="License.rtf" />
+    
+    <!-- Icon -->
+    <Icon Id="AppIcon.ico" SourceFile="app.ico" />
+
+  </Product>
+
+  <Fragment>
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="ProgramFiles64Folder">
+        <Directory Id="INSTALLFOLDER" Name="WindowsTimerLock" />
+      </Directory>
+      
+      <!-- Registry for startup (alternative to scheduled task) -->
+      <Directory Id="ProgramMenuFolder">
+        <Directory Id="ApplicationProgramsFolder" Name="Windows Timer Lock"/>
+      </Directory>
+    </Directory>
+  </Fragment>
+
+  <Fragment>
+    <ComponentGroup Id="ProductComponents" Directory="INSTALLFOLDER">
+      <!-- Main executable -->
+      <Component Id="MainExecutable" Guid="87654321-4321-4321-4321-210987654321" Win64="yes">
+        <File Id="WindowsTimerLockEXE" 
+              Source="output\win-x64\WindowsTimerLock.exe" 
+              KeyPath="yes" 
+              Checksum="yes">
+          <Shortcut Id="ApplicationStartMenuShortcut"
+                    Directory="ApplicationProgramsFolder"
+                    Name="Windows Timer Lock"
+                    Description="Daily Computer Usage Limiter"
+                    WorkingDirectory="INSTALLFOLDER"
+                    Icon="AppIcon.ico"
+                    Advertise="yes" />
+        </File>
+        
+        <!-- Prevent users from deleting the file -->
+        <util:PermissionEx User="Users" 
+                           GenericRead="yes" 
+                           GenericExecute="yes" 
+                           Delete="no" 
+                           DeleteChild="no" />
+        <util:PermissionEx User="Administrators" 
+                           GenericAll="yes" />
+      </Component>
+
+      <!-- Remove folder on uninstall -->
+      <Component Id="ApplicationProgramsMenuFolder" Guid="11111111-1111-1111-1111-111111111111">
+        <RemoveFolder Id="ApplicationProgramsFolder" On="uninstall"/>
+        <RegistryValue Root="HKCU" 
+                       Key="Software\WindowsTimerLock" 
+                       Name="installed" 
+                       Type="integer" 
+                       Value="1" 
+                       KeyPath="yes"/>
+      </Component>
+    </ComponentGroup>
+
+    <!-- Scheduled Task Component -->
+    <Component Id="ScheduledTaskComponent" 
+               Directory="INSTALLFOLDER" 
+               Guid="22222222-2222-2222-2222-222222222222"
+               Win64="yes">
+      
+      <!-- Create scheduled task using custom action -->
+      <RegistryValue Root="HKLM" 
+                     Key="SOFTWARE\WindowsTimerLock" 
+                     Name="ScheduledTask" 
+                     Type="integer" 
+                     Value="1" 
+                     KeyPath="yes"/>
+    </Component>
+  </Fragment>
+
+  <!-- Custom Actions for Scheduled Task -->
+  <Fragment>
+    <CustomAction Id="CreateScheduledTask"
+                  Directory="INSTALLFOLDER"
+                  ExeCommand="cmd.exe /c schtasks /create /tn &quot;WindowsTimerLock&quot; /tr &quot;[INSTALLFOLDER]WindowsTimerLock.exe&quot; /sc ONSTART /ru SYSTEM /rl HIGHEST /f"
+                  Execute="deferred"
+                  Impersonate="no"
+                  Return="ignore" />
+
+    <CustomAction Id="DeleteScheduledTask"
+                  ExeCommand="cmd.exe /c schtasks /delete /tn &quot;WindowsTimerLock&quot; /f"
+                  Execute="deferred"
+                  Impersonate="no"
+                  Return="ignore" />
+
+    <InstallExecuteSequence>
+      <Custom Action="CreateScheduledTask" After="InstallFiles">NOT Installed</Custom>
+      <Custom Action="DeleteScheduledTask" Before="RemoveFiles">Installed AND NOT UPGRADINGPRODUCTCODE</Custom>
+    </InstallExecuteSequence>
+  </Fragment>
+
+</Wix>
