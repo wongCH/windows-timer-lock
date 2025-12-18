@@ -426,19 +426,29 @@ When time limit is reached, a full-screen lock appears:
 ⚠️ **Important Security Notes:**
 
 1. This application requires Administrator privileges
-2. Users with Administrator access can terminate the process
-3. Advanced users can:
+2. Implements system-wide keyboard hook to prevent task switching
+3. Blocks Alt+Tab, Windows key, and Ctrl+Esc during operation
+4. Users with Administrator access can still:
+   - Use Ctrl+Alt+Del to access Task Manager
+   - Terminate the process via Task Manager
    - Delete the `timer_data.bin` file
-   - Use Task Manager to kill the process
    - Boot into Safe Mode to disable the scheduled task
    - Uninstall via Add/Remove Programs (MSI) or delete files manually
 
+**Restricted Actions:**
+- ❌ Alt+Tab (task switching) - Blocked
+- ❌ Windows key (Start menu) - Blocked
+- ❌ Ctrl+Esc (Start menu) - Blocked
+- ✅ Ctrl+Alt+Del (security screen) - Available for safety
+
 For production use in a managed environment, consider:
+- Using Windows Group Policy to restrict access to Task Manager
 - Using Windows Group Policy to restrict access to Task Scheduler
 - Setting NTFS permissions (done automatically by MSI installer)
 - Monitoring via MDM (Mobile Device Management) solutions
 - Code signing the MSI to avoid SmartScreen warnings
 - Implementing additional process protection mechanisms
+- Disabling Safe Mode boot options via Group Policy
 
 ## License
 
