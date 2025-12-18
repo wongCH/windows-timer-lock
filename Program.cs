@@ -27,6 +27,26 @@ namespace WindowsTimerLock
         [DllImport("user32.dll")]
         static extern bool LockWorkStation();
 
+        // Keyboard hook declarations
+        [DllImport("user32.dll")]
+        static extern IntPtr SetWindowsHookEx(int idHook, LowLevelKeyboardProc lpfn, IntPtr hMod, uint dwThreadId);
+
+        [DllImport("user32.dll")]
+        static extern bool UnhookWindowsHookEx(IntPtr hhk);
+
+        [DllImport("user32.dll")]
+        static extern IntPtr CallNextHookEx(IntPtr hhk, int nCode, IntPtr wParam, IntPtr lParam);
+
+        [DllImport("kernel32.dll")]
+        static extern IntPtr GetModuleHandle(string lpModuleName);
+
+        private delegate IntPtr LowLevelKeyboardProc(int nCode, IntPtr wParam, IntPtr lParam);
+
+        private const int WH_KEYBOARD_LL = 13;
+        private const int WM_KEYDOWN = 0x0100;
+        private const int WM_SYSKEYDOWN = 0x0104;
+        private IntPtr hookId = IntPtr.Zero;
+
         // Configuration
         private const string DATA_FILE = "timer_data.bin";
         private const string CONFIG_FILE = "config.bin";
@@ -48,6 +68,7 @@ namespace WindowsTimerLock
         // Settings
         private int maxHours = 4; //maximum hours per day
         private string passwordHash;
+        private LowLevelKeyboardProc keyboardProc;
 
         public TimerLockApp()
         {
@@ -76,6 +97,10 @@ namespace WindowsTimerLock
             killSwitchTimer.Interval = 10000;
             killSwitchTimer.Tick += (s, e) => CheckKillSwitch();
             killSwitchTimer.Start();
+
+            // Install keyboard hook to disable Alt+Tab
+            keyboardProc = HookCallback;
+            hookId = SetHook(keyboardProc);
 
             UpdateTrayIcon();
         }
@@ -174,6 +199,43 @@ namespace WindowsTimerLock
                 int seconds = remaining.Seconds;
                 trayIcon.Text = $"Remaining: {hours:D2}:{minutes:D2}:{seconds:D2}";
             }
+        }
+
+        private IntPtr SetHook(LowLevelKeyboardProc proc)
+        {
+            using (var curProcess = System.Diagnostics.Process.GetCurrentProcess())
+            using (var curModule = curProcess.MainModule)
+            {
+                return SetWindowsHookEx(WH_KEYBOARD_LL, proc, GetModuleHandle(curModule?.ModuleName ?? ""), 0);
+            }
+        }
+
+        private IntPtr HookCallback(int nCode, IntPtr wParam, IntPtr lParam)
+        {
+            if (nCode >= 0 && (wParam == (IntPtr)WM_KEYDOWN || wParam == (IntPtr)WM_SYSKEYDOWN))
+            {
+                int vkCode = System.Runtime.InteropServices.Marshal.ReadInt32(lParam);
+                
+                // Block Alt+Tab (VK_TAB = 0x09 with Alt key)
+                if (vkCode == 0x09 && (System.Windows.Forms.Control.ModifierKeys & Keys.Alt) != 0)
+                {
+                    return (IntPtr)1; // Block the key
+                }
+                
+                // Block Ctrl+Escape (VK_ESCAPE = 0x1B)
+                if (vkCode == 0x1B && (System.Windows.Forms.Control.ModifierKeys & Keys.Control) != 0)
+                {
+                    return (IntPtr)1; // Block the key
+                }
+                
+                // Block Windows key (VK_LWIN = 0x5B, VK_RWIN = 0x5C)
+                if (vkCode == 0x5B || vkCode == 0x5C)
+                {
+                    return (IntPtr)1; // Block the key
+                }
+            }
+            
+            return CallNextHookEx(hookId, nCode, wParam, lParam);
         }
 
         private void ShowCountdown_Click(object? sender, EventArgs e)
@@ -410,6 +472,7 @@ namespace WindowsTimerLock
                 case SessionSwitchReason.SessionLogoff:
                 case SessionSwitchReason.ConsoleDisconnect:
                 case SessionSwitchReason.RemoteDisconnect:
+                    // Pause timer on lock, logoff, or disconnect
                     SaveUsageData();
                     isPaused = true;
                     break;
@@ -418,13 +481,11 @@ namespace WindowsTimerLock
                 case SessionSwitchReason.SessionLogon:
                 case SessionSwitchReason.ConsoleConnect:
                 case SessionSwitchReason.RemoteConnect:
+                    // Resume timer on unlock, logon, or connect
+                    isPaused = false;
                     lastUpdateTime = DateTime.Now;
                     
-                    if (totalUsageToday.TotalHours < maxHours && isEnabled)
-                    {
-                        isPaused = false;
-                    }
-                    else if (isEnabled)
+                    if (totalUsageToday.TotalHours >= maxHours && isEnabled)
                     {
                         Task.Delay(2000).ContinueWith(_ => LockComputer());
                     }
@@ -437,17 +498,15 @@ namespace WindowsTimerLock
             switch (e.Mode)
             {
                 case PowerModes.Suspend:
+                    // Pause timer on suspend/sleep (includes lid close)
                     SaveUsageData();
                     isPaused = true;
                     break;
 
                 case PowerModes.Resume:
+                    // Resume timer on wake
+                    isPaused = false;
                     lastUpdateTime = DateTime.Now;
-                    
-                    if (totalUsageToday.TotalHours < maxHours && isEnabled)
-                    {
-                        isPaused = false;
-                    }
                     break;
             }
         }
@@ -465,6 +524,12 @@ namespace WindowsTimerLock
         {
             if (disposing)
             {
+                // Unhook keyboard
+                if (hookId != IntPtr.Zero)
+                {
+                    UnhookWindowsHookEx(hookId);
+                }
+                
                 updateTimer?.Dispose();
                 saveTimer?.Dispose();
                 killSwitchTimer?.Dispose();

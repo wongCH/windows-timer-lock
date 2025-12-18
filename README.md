@@ -12,9 +12,11 @@ A Windows GUI application with system tray integration that limits daily compute
 - ✅ **Reset Timer on Lock** - Reset counter to zero directly from lock screen
 - ✅ **Daily Reset** - Automatically resets at midnight
 - ✅ **Smart Pause** - Stops counting when:
+  - Screen is locked (Win+L)
   - Laptop lid is closed
   - System goes to sleep/suspend
-  - User logs out or locks the session
+  - User logs out
+- ✅ **Task Switching Disabled** - Blocks Alt+Tab, Win key, Ctrl+Esc to prevent app switching
 - ✅ **Persistence** - Usage time survives reboots
 
 ### GUI & Admin Controls
@@ -32,6 +34,7 @@ A Windows GUI application with system tray integration that limits daily compute
 - ✅ **Single EXE** - All dependencies included (~49 MB)
 - ✅ **Admin Privileges** - Required for system-level operations
 - ✅ **Secure** - SHA-256 password hashing
+- ✅ **System-Level Keyboard Hook** - Prevents task switching and bypassing
 
 ## System Requirements
 
@@ -222,12 +225,22 @@ After editing, rebuild with `./build.sh`
 2. **Persistence**: Usage data is saved every 30 seconds to `timer_data.bin`
 3. **Daily Reset**: Automatically resets at midnight (00:00)
 4. **Pause Events**: Stops counting when:
+   - User locks the screen (Win+L)
    - System suspends/sleeps
-   - User locks the screen
    - User logs out
    - Lid closes (triggers suspend)
-5. **Lock Mechanism**: Uses Windows API `LockWorkStation()` to lock the computer
-6. **Admin Required**: Manifest requires administrator privileges for system-level operations
+   - Remote desktop disconnects
+5. **Resume Events**: Resumes counting when:
+   - User unlocks the screen
+   - System wakes from sleep
+   - User logs back in
+   - Remote desktop reconnects
+6. **Keyboard Hook**: System-wide hook blocks:
+   - Alt+Tab (task switching)
+   - Windows key (Start menu)
+   - Ctrl+Esc (Start menu)
+7. **Lock Mechanism**: Uses Windows API `LockWorkStation()` to lock the computer
+8. **Admin Required**: Manifest requires administrator privileges for system-level operations
 
 ## File Structure
 
@@ -361,8 +374,9 @@ When time limit is reached, a full-screen lock appears:
   - Restart normally - application will exit
   - Delete `config.bin` to reset password
 
-### Lock screen won't close
+### Lock screen won't close / Can't switch applications
 - This is intentional - only correct password unlocks
+- Alt+Tab, Win key, and Ctrl+Esc are blocked to prevent bypassing
 - Lock screen will re-appear if time still exceeded
 - Admin can unlock temporarily to:
   - Save work
@@ -370,6 +384,7 @@ When time limit is reached, a full-screen lock appears:
   - Change max hours
   - Disable timer
 - After changes, lock screen won't reappear if under new limit
+- **Safety:** Ctrl+Alt+Del still works to access Task Manager
 
 ### Tray icon not visible
 - Check hidden icons area (click arrow in system tray)
