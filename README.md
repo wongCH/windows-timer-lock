@@ -16,7 +16,14 @@ A Windows GUI application with system tray integration that limits daily compute
   - Laptop lid is closed
   - System goes to sleep/suspend
   - User logs out
-- ✅ **Task Switching Disabled** - Blocks Alt+Tab, Win key, Ctrl+Esc to prevent app switching
+- ✅ **Auto-Resume** - Automatically unpauses timer every minute when system returns to active session
+- ✅ **Enhanced Security** - Comprehensive hotkey blocking prevents bypass attempts:
+  - 🚫 Task Manager (Ctrl+Shift+Esc, Ctrl+Shift+Del)
+  - 🚫 Task Switching (Alt+Tab, Alt+Esc)
+  - 🚫 System Shortcuts (Win key, Ctrl+Escape, Alt+F4)
+  - 🚫 Function Keys with modifiers (F1-F12 + Ctrl/Alt/Shift)
+  - 🚫 Context Menu key
+  - ⚙️ Registry-based Task Manager disable during lock screen
 - ✅ **Persistence** - Usage time survives reboots
 
 ### GUI & Admin Controls
@@ -35,6 +42,7 @@ A Windows GUI application with system tray integration that limits daily compute
 - ✅ **Admin Privileges** - Required for system-level operations
 - ✅ **Secure** - SHA-256 password hashing
 - ✅ **System-Level Keyboard Hook** - Prevents task switching and bypassing
+- ✅ **Dual-Layer Security** - Keyboard hooks + registry-based Task Manager disable
 
 ## System Requirements
 
@@ -216,6 +224,7 @@ To modify default settings, edit [Program.cs](Program.cs):
 - Update timer interval: 1000ms = 1 second (line 61)
 - Save timer interval: 30000ms = 30 seconds (line 67)
 - Kill switch check: 10000ms = 10 seconds (line 72)
+- Power mode check: 60000ms = 1 minute (line 78)
 
 After editing, rebuild with `./build.sh`
 
@@ -235,12 +244,25 @@ After editing, rebuild with `./build.sh`
    - System wakes from sleep
    - User logs back in
    - Remote desktop reconnects
-6. **Keyboard Hook**: System-wide hook blocks:
+6. **Auto-Resume Check**: Every 1 minute, checks if system is in active session and automatically unpauses the timer if it was paused
+6. **Enhanced Keyboard Hook**: System-wide hook blocks:
+   - Ctrl+Shift+Esc (Task Manager)
+   - Ctrl+Shift+Del (Alternative Task Manager)
    - Alt+Tab (task switching)
-   - Windows key (Start menu)
-   - Ctrl+Esc (Start menu)
-7. **Lock Mechanism**: Uses Windows API `LockWorkStation()` to lock the computer
-8. **Admin Required**: Manifest requires administrator privileges for system-level operations
+   - Alt+Esc (alternative task switcher)
+   - Alt+F4 (window closing)
+   - Windows key (Start menu and all Win+ shortcuts)
+   - Ctrl+Escape (Start menu)
+   - F1-F12 with modifiers (system shortcuts)
+   - Context Menu key
+7. **Registry-Based Protection**: When lock screen is active:
+   - Task Manager is disabled at registry level
+   - Provides additional security layer
+   - Automatically re-enabled when unlocked or app exits
+8. **Lock Mechanism**: Uses Windows API `LockWorkStation()` to lock the computer
+9. **Admin Required**: Manifest requires administrator privileges for system-level operations
+
+📖 **Security Details**: See [SECURITY_ENHANCEMENTS.md](SECURITY_ENHANCEMENTS.md) for complete documentation on bypass prevention
 
 ## File Structure
 
@@ -261,6 +283,7 @@ timer/
 ├── SETUP.md               # Development setup guide
 ├── TEST_CASES.md          # Comprehensive test scenarios
 ├── MSI_INSTALLER.md       # MSI creation guide
+├── SECURITY_ENHANCEMENTS.md # Security & hotkey blocking documentation
 └── output/
     └── win-x64/
         └── WindowsTimerLock.exe  # Final executable (~49 MB)
@@ -376,7 +399,17 @@ When time limit is reached, a full-screen lock appears:
 
 ### Lock screen won't close / Can't switch applications
 - This is intentional - only correct password unlocks
-- Alt+Tab, Win key, and Ctrl+Esc are blocked to prevent bypassing
+- Comprehensive hotkey blocking prevents bypass attempts:
+  - ❌ Ctrl+Shift+Esc (Task Manager) - Blocked
+  - ❌ Ctrl+Shift+Del (Alternative Task Manager) - Blocked
+  - ❌ Alt+Tab (task switching) - Blocked
+  - ❌ Alt+Esc (alternative task switcher) - Blocked
+  - ❌ Alt+F4 (window closing) - Blocked
+  - ❌ Win key (Start menu & all Win+ shortcuts) - Blocked
+  - ❌ Ctrl+Escape (Start menu) - Blocked
+  - ❌ F1-F12 with modifiers (system shortcuts) - Blocked
+  - ❌ Context Menu key - Blocked
+  - ❌ Task Manager (disabled via registry during lock)
 - Lock screen will re-appear if time still exceeded
 - Admin can unlock temporarily to:
   - Save work
@@ -384,7 +417,8 @@ When time limit is reached, a full-screen lock appears:
   - Change max hours
   - Disable timer
 - After changes, lock screen won't reappear if under new limit
-- **Safety:** Ctrl+Alt+Del still works to access Task Manager
+- **Note:** True Ctrl+Alt+Del is handled at kernel level and cannot be blocked by user applications
+- 📖 See [SECURITY_ENHANCEMENTS.md](SECURITY_ENHANCEMENTS.md) for complete security documentation
 
 ### Tray icon not visible
 - Check hidden icons area (click arrow in system tray)
@@ -427,19 +461,33 @@ When time limit is reached, a full-screen lock appears:
 
 1. This application requires Administrator privileges
 2. Implements system-wide keyboard hook to prevent task switching
-3. Blocks Alt+Tab, Windows key, and Ctrl+Esc during operation
-4. Users with Administrator access can still:
-   - Use Ctrl+Alt+Del to access Task Manager
-   - Terminate the process via Task Manager
-   - Delete the `timer_data.bin` file
+3. **Enhanced Security - Blocks multiple bypass methods:**
+   - 🚫 Ctrl+Shift+Esc (Task Manager)
+   - 🚫 Ctrl+Shift+Del (Alternative Task Manager)
+   - 🚫 Alt+Tab (task switching)
+   - 🚫 Alt+Esc (alternative task switcher)
+   - 🚫 Alt+F4 (window closing)
+   - 🚫 Windows key (Start menu and all Win+ shortcuts)
+   - 🚫 Ctrl+Escape (Start menu)
+   - 🚫 F1-F12 with modifiers (system shortcuts)
+   - 🚫 Context Menu key
+4. **Dual-Layer Protection:**
+   - Primary: Low-level keyboard hook intercepts all key presses
+   - Secondary: Registry-based Task Manager disable when lock screen is active
+5. Users with Administrator access can still:
    - Boot into Safe Mode to disable the scheduled task
    - Uninstall via Add/Remove Programs (MSI) or delete files manually
+   - Use kill switch file to emergency stop
 
 **Restricted Actions:**
+- ❌ Ctrl+Shift+Esc (Task Manager) - Blocked by keyboard hook + registry
 - ❌ Alt+Tab (task switching) - Blocked
 - ❌ Windows key (Start menu) - Blocked
-- ❌ Ctrl+Esc (Start menu) - Blocked
-- ✅ Ctrl+Alt+Del (security screen) - Available for safety
+- ❌ Alt+F4 (Close window) - Blocked
+- ❌ All Win+ shortcuts (Win+D, Win+L, Win+R, Win+E, Win+X, etc.) - Blocked
+- ⚠️ Ctrl+Alt+Del (security screen) - Cannot be blocked (kernel-level)
+
+📖 **Complete Security Documentation**: [SECURITY_ENHANCEMENTS.md](SECURITY_ENHANCEMENTS.md)
 
 For production use in a managed environment, consider:
 - Using Windows Group Policy to restrict access to Task Manager
@@ -506,7 +554,22 @@ The shield icon shows real-time countdown in the tooltip.
 
 ## Version History
 
-### v2.3 (Current)
+### v2.4 (Current) - Enhanced Security Update
+- 🔒 **Comprehensive hotkey blocking** - Prevents all common bypass methods
+- 🚫 Added blocking for:
+  - Ctrl+Shift+Esc (Task Manager)
+  - Ctrl+Shift+Del (Alternative Task Manager)
+  - Alt+Esc (alternative task switcher)
+  - Alt+F4 (window closing)
+  - F1-F12 with modifiers (system shortcuts)
+  - Context Menu key
+- ⚙️ **Dual-layer security**:
+  - Enhanced keyboard hook with `GetAsyncKeyState` for reliable detection
+  - Registry-based Task Manager disable during lock screen
+- 🛡️ Automatic Task Manager re-enable on unlock or app exit
+- 📖 Added [SECURITY_ENHANCEMENTS.md](SECURITY_ENHANCEMENTS.md) documentation
+
+### v2.3
 - ➕ Added 30-second countdown sound alert
 - 🔊 Plays 3 beeps (800 Hz) when 30 seconds remaining
 - 🔔 Alert plays once per day, resets at midnight
@@ -564,3 +627,5 @@ My Prompts:
 
 5/ in the GUI, the Used Today and Time Remainding must be in tick to update the time.
 6/ the application is in the lock mode, when key in the the admin password, reset the timer counter.
+7/ based on the programme.cs, there are way to bypass the code through hot key like Ctrl+Shift+Esc (Task Manager) N
+Ctrl+Alt+Del. you need to identify all potential hotkey and disabled it when the program is running and in active windows. add Dual-layer security with keyboard hooks + registry-based Task Manager disable. See SECURITY_ENHANCEMENTS.md for complete documentation

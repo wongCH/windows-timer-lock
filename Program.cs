@@ -40,6 +40,9 @@ namespace WindowsTimerLock
         [DllImport("kernel32.dll")]
         static extern IntPtr GetModuleHandle(string lpModuleName);
 
+        [DllImport("user32.dll")]
+        static extern short GetAsyncKeyState(int vKey);
+
         private delegate IntPtr LowLevelKeyboardProc(int nCode, IntPtr wParam, IntPtr lParam);
 
         private const int WH_KEYBOARD_LL = 13;
@@ -57,6 +60,7 @@ namespace WindowsTimerLock
         private System.Windows.Forms.Timer updateTimer;
         private System.Windows.Forms.Timer saveTimer;
         private System.Windows.Forms.Timer killSwitchTimer;
+        private System.Windows.Forms.Timer powerModeCheckTimer;
         
         private TimeSpan totalUsageToday = TimeSpan.Zero;
         private DateTime lastUpdateTime = DateTime.Now;
@@ -64,6 +68,7 @@ namespace WindowsTimerLock
         private bool isPaused = false;
         private bool isEnabled = true;
         private bool soundAlertPlayed = false;
+        private bool isInActiveSession = true; // Track if system is in active session
         
         // Settings
         private int maxHours = 4; //maximum hours per day
@@ -97,6 +102,12 @@ namespace WindowsTimerLock
             killSwitchTimer.Interval = 10000;
             killSwitchTimer.Tick += (s, e) => CheckKillSwitch();
             killSwitchTimer.Start();
+
+            // Set up power mode check timer (every 1 minute)
+            powerModeCheckTimer = new System.Windows.Forms.Timer();
+            powerModeCheckTimer.Interval = 60000; // 60 seconds
+            powerModeCheckTimer.Tick += PowerModeCheckTimer_Tick;
+            powerModeCheckTimer.Start();
 
             // Install keyboard hook to disable Alt+Tab
             keyboardProc = HookCallback;
@@ -160,6 +171,16 @@ namespace WindowsTimerLock
             UpdateTrayIcon();
         }
 
+        private void PowerModeCheckTimer_Tick(object? sender, EventArgs e)
+        {
+            // If in active session and timer is paused, unpause it
+            if (isInActiveSession && isPaused)
+            {
+                isPaused = false;
+                lastUpdateTime = DateTime.Now;
+            }
+        }
+
         private void PlayWarningSound()
         {
             Task.Run(() =>
@@ -210,26 +231,90 @@ namespace WindowsTimerLock
             }
         }
 
+        private bool IsKeyPressed(int vKey)
+        {
+            return (GetAsyncKeyState(vKey) & 0x8000) != 0;
+        }
+
         private IntPtr HookCallback(int nCode, IntPtr wParam, IntPtr lParam)
         {
             if (nCode >= 0 && (wParam == (IntPtr)WM_KEYDOWN || wParam == (IntPtr)WM_SYSKEYDOWN))
             {
                 int vkCode = System.Runtime.InteropServices.Marshal.ReadInt32(lParam);
                 
-                // Block Alt+Tab (VK_TAB = 0x09 with Alt key)
-                if (vkCode == 0x09 && (System.Windows.Forms.Control.ModifierKeys & Keys.Alt) != 0)
+                // Get current modifier states using GetAsyncKeyState for more reliable detection
+                bool ctrlPressed = IsKeyPressed(0x11);  // VK_CONTROL
+                bool shiftPressed = IsKeyPressed(0x10); // VK_SHIFT
+                bool altPressed = IsKeyPressed(0x12);   // VK_MENU (Alt)
+                
+                // Block Ctrl+Shift+Esc (Task Manager)
+                if (vkCode == 0x1B && ctrlPressed && shiftPressed) // VK_ESCAPE = 0x1B
                 {
                     return (IntPtr)1; // Block the key
                 }
                 
-                // Block Ctrl+Escape (VK_ESCAPE = 0x1B)
-                if (vkCode == 0x1B && (System.Windows.Forms.Control.ModifierKeys & Keys.Control) != 0)
+                // Block Ctrl+Shift+Del (alternative Task Manager shortcut)
+                if (vkCode == 0x2E && ctrlPressed && shiftPressed) // VK_DELETE = 0x2E
                 {
                     return (IntPtr)1; // Block the key
                 }
                 
-                // Block Windows key (VK_LWIN = 0x5B, VK_RWIN = 0x5C)
+                // Block Ctrl+Alt+Del simulation (we can only block Ctrl+Alt+Del-like key combos)
+                // Note: True Ctrl+Alt+Del is handled by Windows at kernel level, but we can block Delete key with Ctrl+Alt
+                if (vkCode == 0x2E && ctrlPressed && altPressed) // VK_DELETE = 0x2E
+                {
+                    return (IntPtr)1; // Block the key
+                }
+                
+                // Block Alt+Tab (VK_TAB = 0x09)
+                if (vkCode == 0x09 && altPressed)
+                {
+                    return (IntPtr)1; // Block the key
+                }
+                
+                // Block Alt+Esc (another task switcher)
+                if (vkCode == 0x1B && altPressed)
+                {
+                    return (IntPtr)1; // Block the key
+                }
+                
+                // Block Ctrl+Escape (Start Menu)
+                if (vkCode == 0x1B && ctrlPressed)
+                {
+                    return (IntPtr)1; // Block the key
+                }
+                
+                // Block Alt+F4 (Close window)
+                if (vkCode == 0x73 && altPressed) // VK_F4 = 0x73
+                {
+                    return (IntPtr)1; // Block the key
+                }
+                
+                // Block Windows keys (VK_LWIN = 0x5B, VK_RWIN = 0x5C)
                 if (vkCode == 0x5B || vkCode == 0x5C)
+                {
+                    return (IntPtr)1; // Block the key
+                }
+                
+                // Block Win+D, Win+L, Win+R, Win+E, Win+X, etc. (handled by blocking Windows key above)
+                
+                // Block Function keys that might access system functions
+                // F1-F12 keys (VK_F1 = 0x70 to VK_F12 = 0x7B)
+                if (vkCode >= 0x70 && vkCode <= 0x7B)
+                {
+                    // Allow F-keys only without modifiers (for normal use)
+                    // Block if used with Ctrl, Alt, or Shift (system shortcuts)
+                    if (ctrlPressed || altPressed || shiftPressed)
+                    {
+                        return (IntPtr)1; // Block the key
+                    }
+                }
+                
+                // Block Ctrl+Shift (when pressed without other keys, as it might be preparation for Esc)
+                // This is handled by the Ctrl+Shift+Esc check above
+                
+                // Block Apps/Context Menu key (VK_APPS = 0x5D)
+                if (vkCode == 0x5D)
                 {
                     return (IntPtr)1; // Block the key
                 }
@@ -406,6 +491,7 @@ namespace WindowsTimerLock
                 updateTimer?.Stop();
                 saveTimer?.Stop();
                 killSwitchTimer?.Stop();
+                powerModeCheckTimer?.Stop();
                 
                 SystemEvents.SessionSwitch -= OnSessionSwitch;
                 SystemEvents.PowerModeChanged -= OnPowerModeChanged;
@@ -433,34 +519,46 @@ namespace WindowsTimerLock
 
         private void ShowLockScreen()
         {
-            // Show custom lock screen with password unlock
-            using (var lockScreen = new LockScreenForm(passwordHash, totalUsageToday, maxHours))
+            // Disable Task Manager at system level for additional security
+            DisableTaskManager();
+            
+            try
             {
-                var result = lockScreen.ShowDialog();
-                
-                if (result == DialogResult.OK)
+                // Show custom lock screen with password unlock
+                using (var lockScreen = new LockScreenForm(passwordHash, totalUsageToday, maxHours))
                 {
-                    // Admin unlocked without reset
-                    if (totalUsageToday.TotalHours < maxHours)
+                    var result = lockScreen.ShowDialog();
+                    
+                    if (result == DialogResult.OK)
                     {
+                        // Admin unlocked without reset
+                        if (totalUsageToday.TotalHours < maxHours)
+                        {
+                            isPaused = false;
+                            lastUpdateTime = DateTime.Now;
+                        }
+                        else
+                        {
+                            // Still over limit, show lock screen again
+                            ShowLockScreen();
+                            return; // Don't re-enable Task Manager yet
+                        }
+                    }
+                    else if (result == DialogResult.Retry)
+                    {
+                        // Admin unlocked and chose to reset timer
+                        totalUsageToday = TimeSpan.Zero;
                         isPaused = false;
                         lastUpdateTime = DateTime.Now;
-                    }
-                    else
-                    {
-                        // Still over limit, show lock screen again
-                        ShowLockScreen();
+                        soundAlertPlayed = false;
+                        SaveUsageData();
                     }
                 }
-                else if (result == DialogResult.Retry)
-                {
-                    // Admin unlocked and chose to reset timer
-                    totalUsageToday = TimeSpan.Zero;
-                    isPaused = false;
-                    lastUpdateTime = DateTime.Now;
-                    soundAlertPlayed = false;
-                    SaveUsageData();
-                }
+            }
+            finally
+            {
+                // Re-enable Task Manager when unlocked
+                EnableTaskManager();
             }
         }
 
@@ -475,6 +573,7 @@ namespace WindowsTimerLock
                     // Pause timer on lock, logoff, or disconnect
                     SaveUsageData();
                     isPaused = true;
+                    isInActiveSession = false;
                     break;
 
                 case SessionSwitchReason.SessionUnlock:
@@ -484,6 +583,7 @@ namespace WindowsTimerLock
                     // Resume timer on unlock, logon, or connect
                     isPaused = false;
                     lastUpdateTime = DateTime.Now;
+                    isInActiveSession = true;
                     
                     if (totalUsageToday.TotalHours >= maxHours && isEnabled)
                     {
@@ -501,12 +601,14 @@ namespace WindowsTimerLock
                     // Pause timer on suspend/sleep (includes lid close)
                     SaveUsageData();
                     isPaused = true;
+                    isInActiveSession = false;
                     break;
 
                 case PowerModes.Resume:
                     // Resume timer on wake
                     isPaused = false;
                     lastUpdateTime = DateTime.Now;
+                    isInActiveSession = true;
                     break;
             }
         }
@@ -520,10 +622,54 @@ namespace WindowsTimerLock
             }
         }
 
+        private void DisableTaskManager()
+        {
+            try
+            {
+                // Disable Task Manager via registry
+                // HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Policies\System
+                using (var key = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Policies\System"))
+                {
+                    if (key != null)
+                    {
+                        // 1 = Disabled, 0 = Enabled
+                        key.SetValue("DisableTaskMgr", 1, RegistryValueKind.DWord);
+                    }
+                }
+            }
+            catch
+            {
+                // If registry modification fails, continue anyway
+                // The keyboard hook is still active
+            }
+        }
+
+        private void EnableTaskManager()
+        {
+            try
+            {
+                // Re-enable Task Manager via registry
+                using (var key = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Policies\System", true))
+                {
+                    if (key != null)
+                    {
+                        // Remove the restriction
+                        key.DeleteValue("DisableTaskMgr", false);
+                    }
+                }
+            }
+            catch
+            {
+                // If registry modification fails, continue anyway
+            }
+        }
+
         protected override void Dispose(bool disposing)
         {
             if (disposing)
             {
+                // Ensure Task Manager is re-enabled when app exits
+                EnableTaskManager();
                 // Unhook keyboard
                 if (hookId != IntPtr.Zero)
                 {
@@ -533,6 +679,7 @@ namespace WindowsTimerLock
                 updateTimer?.Dispose();
                 saveTimer?.Dispose();
                 killSwitchTimer?.Dispose();
+                powerModeCheckTimer?.Dispose();
                 trayIcon?.Dispose();
             }
             base.Dispose(disposing);
